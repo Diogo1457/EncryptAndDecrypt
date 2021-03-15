@@ -26,7 +26,7 @@ logged in with the user you want to save
 that log.								  
 										  
 ### You can update your username or          
-password. You cant also delete it.         
+password. You can also delete it.         
 										  
 ### You can also encrypt or decrypt files    
 without saving the logs (if you forget     
