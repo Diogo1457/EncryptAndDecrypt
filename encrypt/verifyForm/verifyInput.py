@@ -1,4 +1,6 @@
+from config.config import *
 from utils.utils import *
+
 
 
 
@@ -13,12 +15,12 @@ def decryptOrEncrypt(extension, type):
         if extension == ".encrypted":
             return True
         else:
-            return "Invalid Extension"
+            return TEXTS[62]
     else:
         if extension != ".encrypted":
             return True
         else:
-            return "Already Encrypted"
+            return TEXTS[63]
 
 
 class VerifyInput:
@@ -44,12 +46,12 @@ class VerifyInput:
         """
         if self.filename != "" and self.filename != None:
             if self.password != "":
-                extension = getFileExtension(self.filename)
-                if fileExist(self.filename):
+                extension = File.getExt(self.filename)
+                if File.exits(self.filename):
                     return decryptOrEncrypt(extension, self.type)
                 else:
-                    return "File does not exist"
+                    return TEXTS[64]
             else:
-                return "Must specefie a password"
+                return TEXTS[65]
         else:
             return False

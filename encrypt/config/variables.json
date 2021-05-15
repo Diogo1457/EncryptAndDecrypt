@@ -1,0 +1,31 @@
+{
+    "configs": {
+        "title": "Encrypt or Decrypt",
+        "background": "#3a75a8",
+        "background-button": "white",
+        "resolution": "800x600",
+        "selected-button": "#2e2e2f",
+        "enable-button": "#053f0b",
+        "disable-button": "#8e0b0b",
+        "login-button-background": "#0b8c63",
+        "prev-next-background": "#093024",
+        "button-font-color": "black",
+        "font-color": "white",
+        "smaller-font-no-bold": ["Arial", 10],
+        "small-font-no-bold": ["Arial", 12],
+        "small-font": ["Arial", 12, "bold"],
+        "normal-font": ["Arial", 14, "bold"],
+        "normal-font-no-bold": ["Arial", 14],
+        "big-font": ["Arial", 16, "bold"],
+        "big-font-no-bold": ["Arial", 16],
+        "bigger-font": ["Arial", 20, "bold"],
+        "error-font": ["Arial", 40, "bold"],
+        "huge-font": ["Arial", 100, "bold"],
+        "big-font-italic": ["Arial", 24, "bold", "italic"],
+        "border-width": 0,
+        "button-width": 10,
+        "del-resolution": "400x200",
+        "logs-resolution": "1200x800",
+        "logs-title": "Logs"
+    }
+}

@@ -1,12 +1,17 @@
 try:
 	from tkinter import *
 	from tkinter import filedialog
-	from utils.utils import *
-	from encrypt import *
+	from config.config import *
+	from utils.utils import File
+	from utils.settings import Settings
+	from utils.display import BetterDisplay
+	from utils.json_handle import Json
+	from utils.logs import Logs
+	from widgets.widgets import *
+	from encrypt.encrypt import Encrypt
 	from base64 import b64encode, b64decode
-	from dataBase.database import *
+	from dataBase.database import Database
 	import os
-	import webbrowser
 	from verifyForm.verifySigin import VerifySigin
 	from verifyForm.verifyInput import VerifyInput
 except Exception as e:
@@ -56,22 +61,16 @@ except Exception as e:
 """
 
 FILE = ""
+DEFAULT_TEXT_PLACE = None # Display File Selected
 USERNAME = None # Main username
 PASSWORD = None # Main password
 LOGS_FILE = ""  # Log file
-db = "dataBase/users.db" # dataBase
 
 
-def openInTheWeb(url):
-	"""
-	:param url: website url
-	:return: None
-	Open website on default browser
-	"""
-	webbrowser.open(url)
 
 
 def selectFile(root, task):
+	global DEFAULT_TEXT_PLACE
 	"""
 	:param root: object
 	:param task: encrypt or decrypt
@@ -85,8 +84,10 @@ def selectFile(root, task):
 		FILE = filedialog.askopenfilename(initialdir="~", filetypes=(ENCRYPTED_FILES,))
 	if FILE:
 		FILE = os.path.join(FILE)
-		filename_show = setFilenameSize(FILE, 70)
-		Label(root, text=filename_show, font=("Arial", 14), background="lightblue").place(x=200, y=225)
+		filename_show = BetterDisplay.filename(FILE, 70)
+		if DEFAULT_TEXT_PLACE:
+			DEFAULT_TEXT_PLACE.destroy()
+		DEFAULT_TEXT_PLACE = displayText(root, filename_show, 200, 225, _font=FONT_W)
 	else:
 		FILE = ""
 
@@ -98,15 +99,17 @@ def saveFileWhere(root, task):
 	:return: (bool, str or None)
 	used to select an output file
 	"""
+	global FILE
 	if task == "e":
 		FILE_SAVE = filedialog.asksaveasfilename(initialdir="~", defaultextension=".encrypted", filetypes=(ENCRYPTED_FILES,))
 	if task == "d":
 		FILE_SAVE = filedialog.asksaveasfilename(initialdir="~", defaultextension=".decrypted", filetypes=(DECRYPTED_FILES,))
 	FILE_SAVE = os.path.join(FILE_SAVE)
 	if FILE_SAVE:
-		if createFile(FILE_SAVE) != True:
+		if File.create(FILE_SAVE) != True:
 			return False,
 		else:
+			FILE = FILE_SAVE
 			return True, FILE_SAVE
 	else:
 		return None,
@@ -126,23 +129,23 @@ def encryptFile(root, filename, password, IV, mode, regist=True):
 	v = VerifyInput(filename, password, "e")
 	response = v.verifyInput()
 	if response == True:
-		content = readFile(filename)
-		encrypted_content = encrypt(content, password, IV, mode)
+		content = File.readB(filename)
+		encrypted_content = Encrypt.encrypt(content, password, IV, mode)
 		where_to_save = saveFileWhere(root, "e")
 		encryptFileWindow(root, regist)
 		if where_to_save[0] == True:
-			text = saveFile(encrypted_content, where_to_save[1])
-			text_to_show = setFilenameSize(filename, 60)
-			Label(root, text=text, background="white", borderwidth=5, font=("Arial", 14)).place(x=100, y=450)
+			text = File.save(encrypted_content, where_to_save[1])
+			text_to_show = BetterDisplay.filename(filename, 60)
+			displayText(root, text, 100, 450, _bw=5, _font=FONT_W)
 			if regist:
-				registLog(LOGS_FILE, OPTIONS[2] + text + f" (Password: {password})", PASSWORD)
+				Logs.reg_log(LOGS_FILE, OPTIONS[2] + text + f" (Password: {password})", PASSWORD)
 		else:
-			Label(root, text="Error creating the file", background="lightblue", fg="red", borderwidth=5, font=("Arial", 14, "bold")).place(x=200, y=450)
+			displayText(root, TEXTS[0], 200, 450, _fg="red", _bw=5)
 	elif not response:
 		pass
 	else:
 		encryptFileWindow(root, regist)
-		Label(root, text=response, background="lightblue", fg="red", borderwidth=5, font=("Arial", 14, "bold")).place(x=200, y=450)
+		displayText(root, response, 200, 450, _fg="red", _bw=5)
 
 
 
@@ -159,26 +162,29 @@ def decodeFile(root, filename, password, IV, mode, regist=True):
 	"""
 	v = VerifyInput(filename, password, "d")
 	response = v.verifyInput()
+	fg = "white"
 	if response == True:
-		content = readFile(filename)
-		type = setTypeOfTheFile(content)
-		decrypted_content = decrypt(content, password, IV, mode, type)
+		content = File.readB(filename)
+		type = File.setType(content)
+		decrypted_content = Encrypt.decrypt(content, password, IV, mode, type)
 		if decrypted_content[1] == True:
 			where_to_save = saveFileWhere(root, "d")
 			if where_to_save[0] == True:
-				text = saveFile(decrypted_content[0], where_to_save[1], False, type)
-				text_to_show = setFilenameSize(text, n=60)
-				Label(root, text=text_to_show, background="white", borderwidth=5, font=("Arial", 12)).place(x=200, y=450)
+				text = File.save(decrypted_content[0], where_to_save[1], False, type)
+				text_to_show = BetterDisplay.filename(text, n=60)
+				response = text_to_show
 				if regist:
-					registLog(LOGS_FILE, OPTIONS[0] + text + f" (Password: {password})", PASSWORD)
+					Logs.reg_log(LOGS_FILE, OPTIONS[0] + text + f" (Password: {password})", PASSWORD)
 			else:
-				Label(root, text="Error creating the file", background="white", borderwidth=5, font=("Arial", 12)).place(x=200, y=450)
+				response = TEXTS[0]
 		else:
-			Label(root, text="Wrong Password", background="white", borderwidth=5, font=("Arial", 12)).place(x=200, y=450)
+			response = TEXTS[1]
 	elif not response:
-		pass
+		return
 	else:
-		Label(root, text=response, background="white", borderwidth=5, font=("Arial", 12)).place(x=200, y=450)
+		fg = "red"
+		decryptFileWindow(root, regist)
+	displayText(root, response, 200, 450, _bw=5, _fg="red")
 
 
 
@@ -196,15 +202,15 @@ def encodeString(root, string, password, IV, mode, regist):
 	if string != "":
 		encryptStringWindow(root, regist)
 		if password != "":
-			string_encrypted = encrypt(string.encode("utf8"), password, IV, mode)
+			string_encrypted = Encrypt.encrypt(string.encode("utf8"), password, IV, mode)
 			string_encrypted = b64encode(string_encrypted).decode("utf8")
-			string_to_show = setFilenameSize(string_encrypted)
-			Label(root, text=string_to_show, background="lightblue", fg="black", borderwidth=0, font=("Arial", 14, "bold")).place(x=100, y=500)
+			string_to_show = BetterDisplay.filename(string_encrypted)
+			displayText(root, string_to_show, 100, 500, _fg="black", _bw=0)
 			if regist:
-				registLog(LOGS_FILE, OPTIONS[3] + string_encrypted + f" (Password: {password})", PASSWORD)
-			Button(root, text="Copy", command=lambda:copyToClip(root, string_encrypted)).place(x=150, y=550)
+				Logs.reg_log(LOGS_FILE, OPTIONS[3] + string_encrypted + f" (Password: {password})", PASSWORD)
+			displayButton(root, TEXTS[2], lambda:copyToClip(root, string_encrypted), 150, 550)
 		else:
-			Label(root, text="Must specefie a password", background="white", borderwidth=5, font=("Arial", 14, "bold")).place(x=100, y=500)
+			displayText(root, TEXTS[3], 100, 500, _bw=5)
 
 
 def decodeString(root, string, password, IV, mode, regist):
@@ -220,45 +226,23 @@ def decodeString(root, string, password, IV, mode, regist):
 	"""
 	if string != "":
 		decryptStringWindow(root, regist)
-		string = isBase64(string)
+		string = Logs.isBase64(string)
 		if not string:
-			Label(root, text="Must be base64 string", background="white", borderwidth=5, font=("Arial", 12, "bold")).place(x=100, y=500)
+			response = TEXTS[4]
 		else:
 			if password != "":
-				try_to_decrypt = decrypt(string, password, IV, mode, "t")
+				try_to_decrypt = Encrypt.decrypt(string, password, IV, mode, "t")
 				if try_to_decrypt[1]:
 					string_decrypted = try_to_decrypt[0]
-					string_to_show = setFilenameSize(string_decrypted)
-					Label(root, text=string_to_show, fg="black", background="white", borderwidth=5, font=("Arial", 12, "bold")).place(x=100, y=500)
+					response = BetterDisplay.filename(string_decrypted)
 					if regist:
-						registLog(LOGS_FILE, OPTIONS[1] + string_decrypted + f" (Password: {password})", PASSWORD)
-					Button(root, text="Copy", command=lambda:copyToClip(root, string_decrypted)).place(x=150, y=550)
+						Logs.reg_log(LOGS_FILE, OPTIONS[1] + string_decrypted + f" (Password: {password})", PASSWORD)
+					displayButton(root, TEXTS[2], lambda:copyToClip(root, string_decrypted), 150, 550)
 				else:
-					Label(root, text=try_to_decrypt[0], fg="black", background="white", borderwidth=5, font=("Arial", 12, "bold")).place(x=100, y=500)
+					response = try_to_decrypt[0]
 			else:
-				Label(root, text="Must specefie a password", background="white", borderwidth=5, font=("Arial", 12, "bold")).place(x=100, y=500)
-
-
-
-def copyToClip(root, text):
-	"""
-	:param root: object
-	:param text: text to copy
-	:return: None
-	copy to clipboard
-	"""
-	root.clipboard_clear()
-	root.clipboard_append(text)
-
-
-def clearAllElements(root):
-	"""
-	:param root: object
-	:return: None
-	clear all elements in the object
-	"""
-	for child in root.winfo_children():
-		child.destroy()
+				response = TEXTS[3]
+		displayText(root, response, 100, 500, _fg="black", _bw=5, _font=SFONT)
 
 
 def multiUsedDivs(root, regist, height=350, width=290):
@@ -266,19 +250,19 @@ def multiUsedDivs(root, regist, height=350, width=290):
 	:param root: object
 	:param regist: bool
 	:param height: height of logs button
+	:param width: width of logs button
 	:return: (object, object)
 	create multi used frames
 	"""
-	Label(root, text="Password", background="lightblue", borderwidth=0, font=("Arial", 16, "bold")).place(x=195, y=70)
-	password = Entry(root, width=25, background="white", fg="black", font=("Arial", 16), show="*")
-	password.place(x=100, y=120)
+	displayText(root, TEXTS[5], 195, 70, _bw=0, _font=BFONT)
+	password = displayEntry(root, 100, 120, _width=25, _bg="white", _fg="black", _font=BFONT_W, _show="*")
 	variable = StringVar(root)
 	variable.set("AES MODE_CBC")
 	menu = OptionMenu(root, variable, "AES MODE_CBC")
 	menu.place(x=500, y=120)
-	Button(root, text="Main Menu", background="lightblue", fg="gray", font=("Arial", 14, "bold"), borderwidth=0, command=lambda:encryptWindow(root, regist)).place(x=0, y=0)
+	displayButton(root, TEXTS[6], lambda:encryptWindow(root, regist), 0, 0, _fg="gray", _bw=0)
 	if regist:
-		Button(root, text="Logs", background="white", borderwidth=0, command=lambda:logsWindow(), width=15, font=("Arial", 14)).place(x=width, y=height)
+		displayButton(root, TEXTS[7], lambda:logsWindow(), width, height, _bg="white", _bw=0, _width=15, _font=FONT_W)
 	return password, variable
 
 
@@ -289,13 +273,15 @@ def encryptFileWindow(root, regist):
 	:return: None
 	display the encrypt file window
 	"""
-	global FILE
+	global FILE, DEFAULT_TEXT_PLACE
 	clearAllElements(root)
-	FILE = ""
+	if FILE != "":
+		filename_show = BetterDisplay.filename(FILE, 70)
+		DEFAULT_TEXT_PLACE = displayText(root, filename_show, 200, 225, _font=FONT_W)
 	password, variable = multiUsedDivs(root, regist)
-	Button(root, text="Select File", background="white", command=lambda:selectFile(root, task="e"), width=7, font=("Arial", 10)).place(x=100, y=225)
+	displayButton(root, TEXTS[8], lambda:selectFile(root, task="e"), 100, 225, _bg="white", _width=7, _font=SM_FONT_W)
 	root.bind("<Return>", lambda e:encryptFile(root, FILE, password.get(), IV, variable.get(), regist))
-	Button(root, text="Encrypt File", background="white", command=lambda:encryptFile(root, FILE, password.get(), IV, variable.get(), regist), width=15, font=("Arial", 14)).place(x=290, y=300)
+	displayButton(root, TEXTS[9], lambda:encryptFile(root, FILE, password.get(), IV, variable.get(), regist), 290, 300, _bg="white", _width=15, _font=FONT_W)
 
 
 
@@ -306,11 +292,15 @@ def decryptFileWindow(root, regist):
 	:return: None
 	display the decrypt file window
 	"""
+	global FILE, DEFAULT_TEXT_PLACE
 	clearAllElements(root)
+	if FILE != "":
+		filename_show = BetterDisplay.filename(FILE, 70)
+		DEFAULT_TEXT_PLACE = displayText(root, filename_show, 200, 225, _font=FONT_W)
 	password, variable = multiUsedDivs(root, regist)
-	Button(root, text="Select File", background="white", borderwidth=0, command=lambda:selectFile(root, task="d"), width=7, font=("Arial", 10)).place(x=100, y=225)
+	displayButton(root, TEXTS[8], lambda:selectFile(root, task="d"), 100, 225, _bg="white", _bw=0, _width=7, _font=SM_FONT_W)
 	root.bind("<Return>", lambda e:decodeFile(root, FILE, password.get(), IV, variable.get(), regist))
-	Button(root, text="Decrypt File", background="white", borderwidth=0, command=lambda:decodeFile(root, FILE, password.get(), IV, variable.get(), regist), width=15, font=("Arial", 14)).place(x=290, y=300)
+	displayButton(root, TEXTS[10], lambda:decodeFile(root, FILE, password.get(), IV, variable.get(), regist), 290, 300, _bg="white", _bw=0, _width=15, _font=FONT_W)
 
 
 def encryptStringWindow(root, regist):
@@ -322,11 +312,10 @@ def encryptStringWindow(root, regist):
 	"""
 	clearAllElements(root)
 	password, variable = multiUsedDivs(root, regist, 400, 310)
-	Label(root, text="String", background="lightblue", borderwidth=0, font=("Arial", 16, "bold")).place(x=250, y=200)
-	string = Entry(root, width=35, background="white", fg="black", font=("Arial", 16))
-	string.place(x=100, y=250)
+	displayText(root, TEXTS[11], 250, 200, _bw=0, _font=BFONT)
+	string = displayEntry(root, 100, 250, _width=35, _bg="white", _fg="black", _font=BFONT_W)
 	root.bind("<Return>", lambda e:encodeString(root, string.get(), password.get(), IV, variable.get(), regist))
-	Button(root, text="Encrypt String", background="white", command=lambda:encodeString(root, string.get(), password.get(), IV, variable.get(), regist), width=20, font=("Arial", 14)).place(x=290, y=350)
+	displayButton(root, TEXTS[12], lambda:encodeString(root, string.get(), password.get(), IV, variable.get(), regist), 290, 350, _bg="white", _width=20, _font=FONT_W)
 
 
 def decryptStringWindow(root, regist):
@@ -336,15 +325,12 @@ def decryptStringWindow(root, regist):
 	:return: None
 	display the decrypt string window
 	"""
-	global FILE
 	clearAllElements(root)
-	FILE = ""
 	password, variable = multiUsedDivs(root, regist, 400, 310)
-	Label(root, text="Encoded String", background="lightblue", borderwidth=0, font=("Arial", 16, "bold")).place(x=220, y=200)
-	string = Entry(root, width=35, background="white", fg="black", font=("Arial", 16))
-	string.place(x=100, y=250)
+	displayText(root, TEXTS[13], 220, 200, _bw=0, _font=BFONT)
+	string = displayEntry(root, 100, 250, _width=35, _bg="white", _fg="black", _font=BFONT_W)
 	root.bind("<Return>", lambda e:decodeString(root, string.get(), password.get(), IV, variable.get(), regist))
-	Button(root, text="Decrypt String", borderwidth=0, background="white", command=lambda:decodeString(root, string.get(), password.get(), IV, variable.get(), regist), width=20, font=("Arial", 14)).place(x=290, y=350)
+	displayButton(root, TEXTS[14], lambda:decodeString(root, string.get(), password.get(), IV, variable.get(), regist), 290, 350, _bw=0, _bg="white", _width=20, _font=FONT_W)
 
 
 def encryptWindow(root, logs=True):
@@ -356,18 +342,18 @@ def encryptWindow(root, logs=True):
 	"""
 	clearAllElements(root)
 	root.unbind("<Return>")
-	Label(root, text="Secure your Data", background="lightblue", fg="white", borderwidth=0, font=("Arial", 24, "bold", "italic")).place(x=280, y=50)
-	Button(root, text="Encrypt File", command=lambda:encryptFileWindow(root, logs), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=100, y=150)
-	Button(root, text="Decrypt File", command=lambda:decryptFileWindow(root, logs), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=100, y=220)
-	Button(root, text="Encrypt String", command=lambda:encryptStringWindow(root, logs), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=500, y=150)
-	Button(root, text="Decrypt String", command=lambda:decryptStringWindow(root, logs), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=500, y=220)
+	displayText(root, TEXTS[15], 280, 50, _bw=0, _font=BFONT_I)
+	displayButton(root, TEXTS[9], lambda:encryptFileWindow(root, logs), 100, 150, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
+	displayButton(root, TEXTS[10], lambda:decryptFileWindow(root, logs), 100, 220, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
+	displayButton(root, TEXTS[12], lambda:encryptStringWindow(root, logs), 500, 150, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
+	displayButton(root, TEXTS[14], lambda:decryptStringWindow(root, logs), 500, 220, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
 	if logs:
-		Button(root, text="Profile", command=lambda:profileWindow(root), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=100, y=290)
-		Button(root, text="Logs", command=lambda:logsWindow(), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=500, y=290)
+		displayButton(root, TEXTS[16], lambda:profileWindow(root), 100, 290, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
+		displayButton(root, TEXTS[7], lambda:logsWindow(), 500, 290, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
 	else:
-		Label(root, text="Logs are disable! All passwords used to encrypt your data won't be save", fg="red", borderwidth=0, background="lightblue", font=("Arial", 14, "bold")).place(x=100, y=300)
-	Button(root, text="Change User", command=lambda:loginWindow(root, 0), width=20, background="white", fg="black", borderwidth=0, font=("Arial", 14)).place(x=320, y=400)
-	Button(root, text="GitHub", command=lambda:openInTheWeb(URLS[0]), width=20, background="lightblue", fg="black", borderwidth=0, font=("Arial", 14, "bold")).place(x=320, y=500)
+		displayText(root, TEXTS[17], 100, 300, _fg="red", _bw=0)
+	displayButton(root, TEXTS[18], lambda:loginWindow(root, 0), 320, 400, _width=20, _bg="white", _fg="black", _bw=0, _font=FONT_W)
+	displayButton(root, TEXTS[19], lambda:Settings.openInTheWeb(URLS[0]), 320, 500, _width=20, _fg="black", _bw=0)
 
 
 def deleteUserWindow(root):
@@ -378,17 +364,16 @@ def deleteUserWindow(root):
 	"""
 	global delete_window
 	try:
-		delete_window.destroy()
+		info = delete_window.winfo_children()
 	except:
-		pass
-	delete_window = Tk()
-	delete_window.title("Delete")
-	delete_window.geometry("400x200")
-	delete_window.configure(background="lightblue")
-	Label(delete_window, text="Are you sure? All logs will be deleted", background="lightblue").pack(pady=20)
-	Button(delete_window, text="Yes", width=10,  command=lambda:deleteConfirmed(root), font=("Arial", 12)).pack()
-	Button(delete_window, text="No", width=10, command=lambda:deleteRefused(root), font=("Arial", 12)).pack()
-	delete_window.mainloop()
+		delete_window = Tk()
+		delete_window.title(TEXTS[20])
+		delete_window.geometry(DR)
+		delete_window.configure(bg=BG)
+		displayText(delete_window, TEXTS[21], _place=False).pack(pady=20)
+		displayButton(delete_window, TEXTS[22], lambda:deleteConfirmed(root), _width=10, _font=SFONT_W, _place=False).pack()
+		displayButton(delete_window, TEXTS[23], lambda:deleteRefused(root), _width=10, _font=SFONT_W, _place=False).pack()
+		delete_window.mainloop()
 
 
 def deleteRefused(root):
@@ -409,7 +394,7 @@ def deleteConfirmed(root):
 	delete account was confirm
 	"""
 	delete_window.destroy()
-	try_delete_user = deleteUser(db, USERNAME)
+	try_delete_user = Database.delUser(DB, USERNAME)
 	if try_delete_user:
 		USERNAME = None
 		PASSWORD = None
@@ -431,23 +416,23 @@ def updatePasswordHandle(root, password):
 	v = VerifySigin(USERNAME, password)
 	verify_password = v.verifyPassword()
 	if verify_password == True:
-		update_password = updatePassword(db, USERNAME, encryptPassword(password), encryptPassword(PASSWORD))
+		update_password = Database.pass_up(DB, USERNAME, Encrypt.encryptPassword(password), Encrypt.encryptPassword(PASSWORD))
 		if update_password == True:
-			logs = readLog(LOGS_FILE)
+			logs = Logs.readLog(LOGS_FILE)
 			if logs:
 				if len(logs) != 0:
-					decoded_logs = decodeLogs(logs, PASSWORD)
-					deleteFileContent(LOGS_FILE)
+					decoded_logs = Logs.decodeLogs(logs, PASSWORD)
+					File.delCont(LOGS_FILE)
 					for log in decoded_logs:
-						registLog(LOGS_FILE, log, password)
+						Logs.reg_log(LOGS_FILE, log, password)
 			USERNAME = None
 			PASSWORD = None
 			LOGS_FILE = ""
 			loginWindow(root, 0)
 		else:
-			Label(root, text=update_password, background="lightblue", borderwidth=0, fg="gray", font=("Arial", 14, "bold")).pack()
+			displayText(root, update_password, _bw=0, _fg="gray", _place=False).pack()
 	else:
-		Label(root, text=verify_password, background="lightblue", borderwidth=0, fg="gray", font=("Arial", 14, "bold")).pack()
+		displayText(root, verify_password, _bw=0, _fg="gray", _place=False).pack()
 
 
 
@@ -463,15 +448,16 @@ def updateUsernameHandle(root, username):
 	v = VerifySigin(username, PASSWORD)
 	verify_username = v.verifyUsername()
 	if verify_username == True:
-		username_update = updateUsername(db, USERNAME, username, encryptPassword(PASSWORD))
+		username_update = Database.user_up(DB, USERNAME, username, Encrypt.encryptPassword(PASSWORD))
 		if username_update == True:
-			Label(root, text="Username was Changed", background="lightblue", borderwidth=0, fg="gray", font=("Arial", 14, "bold")).pack()
+			text = TEXTS[24]
 			USERNAME = username
 			LOGS_FILE = f"logs/{username}.log"
 		else:
-			Label(root, text=username_update, background="lightblue", borderwidth=0, fg="gray", font=("Arial", 14, "bold")).pack()
+			text = username_update
 	else:
-		Label(root, text=verify_username, background="lightblue", borderwidth=0, fg="gray", font=("Arial", 14, "bold")).pack()
+		text = verify_username
+	displayText(root, text, _bw=0, _place=False).pack()
 
 
 
@@ -482,17 +468,17 @@ def profileWindow(root):
 	display profile settings to update
 	"""
 	clearAllElements(root)
-	Label(root, text=USERNAME, background="lightblue", fg="gray", font=("Arial", 16, "bold")).pack(pady=10)
-	Label(root, text="Update your username", background="lightblue", borderwidth=0, fg="gray", font=("Arial", 16, "bold")).pack(pady=10)
-	username = Entry(root, width=30, font=("Arial", 14))
+	displayText(root, USERNAME, _font=BFONT, _place=False).pack(pady=10)
+	displayText(root, TEXTS[25], _bw=0, _font=BFONT, _place=False).pack(pady=10)
+	username = displayEntry(root, _width=30, _font=BFONT_W, _fg="black")
 	username.pack(pady=10)
-	Button(root, text="Update Username", command=lambda:updateUsernameHandle(root, username.get()), width=15, font=("Arial", 14)).pack(pady=20)
-	Label(root, text="Update your password", background="lightblue", borderwidth=0, fg="gray", font=("Arial", 16, "bold")).pack(pady=10)
-	password = Entry(root, show="*", width=30, font=("Arial", 14))
+	displayButton(root, TEXTS[26], lambda:updateUsernameHandle(root, username.get()), _width=15, _bg=FG, _font=FONT_W, _place=False).pack(pady=20)
+	displayText(root, TEXTS[27], _bw=0, _font=BFONT, _place=False).pack(pady=10)
+	password = displayEntry(root, _show="*", _width=30, _font=BFONT_W, _place=False, _fg="black")
 	password.pack(pady=10)
-	Button(root, text="Update Password", command=lambda:updatePasswordHandle(root, password.get()), width=15, font=("Arial", 14)).pack(pady=10)
-	Button(root, text="Delete User", command=lambda:deleteUserWindow(root), width=15, font=("Arial", 14)).pack(pady=(50, 0))
-	Button(root, text="Back", command=lambda:encryptWindow(root)).pack(pady=(50, 0))
+	displayButton(root, TEXTS[28], lambda:updatePasswordHandle(root, password.get()), _width=15, _bg=FG, _font=FONT_W, _place=False).pack(pady=10)
+	displayButton(root, TEXTS[29], lambda:deleteUserWindow(root), _width=15, _bg=FG, _font=FONT_W, _place=False).pack(pady=(50, 0))
+	displayButton(root, TEXTS[30], lambda:encryptWindow(root), _place=False).pack(pady=(50, 0))
 
 
 
@@ -508,17 +494,21 @@ def authenticate(root, username, password):
 	global USERNAME, PASSWORD, LOGS_FILE
 	if password != "":
 		authenticateWindow(root, username)
-		verify_password = verifyPass(db, username, encryptPassword(password))
-		if verify_password == True:
-			root.unbind("<Return>")
-			encryptWindow(root)
-			USERNAME = username
-			PASSWORD = password
-			LOGS_FILE = "logs/" + USERNAME + ".log"
-		elif not verify_password:
-			Label(root, text=f"Invalid creds", background="lightblue", borderwidth=0, font=("Arial", 14, "bold")).pack()
+		verify = VerifySigin(username, password)
+		if verify.verifyPassword() == True:
+			verify_password = Database.checkCreds(DB, username, Encrypt.encryptPassword(password))
+			if verify_password == True:
+				root.unbind("<Return>")
+				encryptWindow(root)
+				USERNAME = username
+				PASSWORD = password
+				LOGS_FILE = "logs/" + USERNAME + ".log"
+			elif not verify_password:
+				displayText(root, TEXTS[31], _bw=0, _place=False).pack()
+			else:
+				displayText(root, verify_password, _bw=0, _place=False).pack()
 		else:
-			Label(root, text=verify_password, background="lightblue", borderwidth=0, font=("Arial", 14, "bold")).pack()
+			displayText(root, TEXTS[31], _bw=0, _place=False).pack()
 
 
 def authenticateWindow(root, user):
@@ -529,13 +519,13 @@ def authenticateWindow(root, user):
 	display the window to type the password
 	"""
 	clearAllElements(root)
-	Label(root, text=f"Password for {user}", fg="gray", background="lightblue", borderwidth=0, font=("Arial", 20, "bold")).pack(pady=50)
-	Label(root, text="Password", background="lightblue", borderwidth=0, font=("Arial", 16, "bold")).pack(pady=(0, 20))
-	password = Entry(root, width=25, background="white", fg="black", font=("Arial", 16), show="*")
+	displayText(root, TEXTS[32] + user, _bw=0, _font=BG_FONT, _place=False).pack(pady=50)
+	displayText(root, TEXTS[5], _bw=0, _font=BFONT, _place=False).pack(pady=(0, 20))
+	password = displayEntry(root, _width=25, _bg="white", _fg="black", _font=BFONT_W, _show="*", _place=False)
 	password.pack(pady=(0, 50))
 	root.bind("<Return>", lambda e:authenticate(root, user, password.get()))
-	Button(root, text="Login", command=lambda:authenticate(root, user, password.get()), width=12, background="white", fg="black", borderwidth=0, font=("Arial", 14, "bold")).pack()
-	Button(root, text="Change User", command=lambda:loginWindow(root, 0), width=12, background="lightblue",borderwidth=0, fg="gray", font=("Arial", 14, "bold")).pack(pady=(50, 50))
+	displayButton(root, TEXTS[33], lambda:authenticate(root, user, password.get()), _width=12, _bg=LB_BG, _fg="white", _bw=0, _place=False).pack()
+	displayButton(root, TEXTS[34], lambda:loginWindow(root, 0), _width=12,_bw=0, _place=False).pack(pady=(50, 50))
 
 
 def dontHaveUser(root):
@@ -544,13 +534,14 @@ def dontHaveUser(root):
 	:return: None
 	used to display create user and start information
 	"""
-	Button(root, text="Encrypt or Decrypt without a user", command=lambda:encryptWindow(root, False), background="white", fg="gray", borderwidth=0, font=("Arial", 14, "bold")).place(x=250, y=50)
-	Label(root, text=f"Logs won't be saved", background="lightblue", borderwidth=0, fg="red", font=("Arial", 14, "bold")).place(x=320, y=100)
-	Label(root, text=f"Logs keep the passwords used to encrypt your data", background="lightblue", borderwidth=0, fg="black", font=("Arial", 14, "bold")).place(x=190, y=150)
+	displayButton(root, TEXTS[35], lambda:encryptWindow(root, False), 250, 50, _bg="white", _fg="gray", _bw=0)
+	displayText(root, TEXTS[36], 320, 100, _bw=0, _fg="red")
+	displayText(root, TEXTS[37], 190, 150, _bw=0, _fg="black")
 	path = os.getcwd()
-	path = setFilenameSize(path, 60)
-	Label(root, text=f"All users are only local, \nthat means they only exist in your computer, \nif you change computer you will need to export \nyour logs files saved on \n {path}\n /logs/<<username>>.log \n and create a user with the same password", background="lightblue", borderwidth=0, fg="red", font=("Arial", 14, "bold")).place(x=150, y=400)
-	Button(root, text="Create a User to start", command=lambda:createUserWindow(root), fg="gray", bg="white", width=20, font=("Arial", 20, "bold")).place(x=250, y=250)
+	path = BetterDisplay.filename(path, 60)
+	big_text = BetterDisplay.bigText(TEXTS[38], path)
+	displayText(root, big_text, 150, 400, _bw=0, _fg="red")
+	displayButton(root, TEXTS[39], lambda:createUserWindow(root), 250, 250, _fg="gray", _bg="white", _width=20, _font=BG_FONT)
 
 
 def displayUsers(root, all_users, start):
@@ -572,23 +563,23 @@ def displayUsers(root, all_users, start):
 			paddingx = 100
 		if row != 0:
 			paddingy = 50
-		Button(root, text=user, command=lambda user=user:authenticateWindow(root, user), width=10, height=4, background="white", fg="gray", font=("Arial", 20, "bold"), borderwidth=0).grid(row=row, column=cont, padx=(paddingx, 70), pady=(paddingy, 50))
+		displayButton(root, user, lambda user=user:authenticateWindow(root, user), _fg=FG, _width=10, _bg="#0b8c63", _height=4, _font=BG_FONT, _bw=0, _place=False).grid(row=row, column=cont, padx=(paddingx, 70), pady=(paddingy, 50))
 		cont += 1
 		if cont >= 2:
 			row += 1
 			cont = 0
-	Button(root, text="+", command=lambda:createUserWindow(root), background="lightblue", fg="gray", borderwidth=0, font=("Arial", 100, "bold")).grid(row=row, column=cont, padx=(paddingx, 70), pady=(paddingy, 40))
+	displayButton(root, "+", lambda:createUserWindow(root), _bw=0, _font=HFONT, _fg=FG, _place=False).grid(row=row, column=cont, padx=(paddingx, 70), pady=(paddingy, 40))
 	start += 3
-	Button(root, text="Encrypt or Decrypt without a user", command=lambda:encryptWindow(root, False), background="gray", fg="white", borderwidth=0, font=("Arial", 14, "bold")).place(x=260, y=20)
+	displayButton(root, TEXTS[35], lambda:encryptWindow(root, False), 260, 20, _fg=FG, _bg="#026571", _bw=0)
 	if len(all_users) - start > 0:
-		Button(root, text="Next Page", command=lambda:loginWindow(root, start), background="lightblue", fg="gray", borderwidth=0, font=("Arial", 14, "bold")).place(x=620, y=550)
+		displayButton(root, TEXTS[40], lambda:loginWindow(root, start), 620, 550, _fg=FG, _bg=PN_BG, _bw=0)
 	if start > 3:
-		Button(root, text="Previous Page", command=lambda:loginWindow(root, start - 6), background="lightblue", fg="gray", borderwidth=0, font=("Arial", 14, "bold")).place(x=470, y=550)
+		displayButton(root, TEXTS[41], lambda:loginWindow(root, start - 6), 470, 550, _fg=FG, _bg=PN_BG, _bw=0)
 	return start
 
 
 def loginWindow(root, start):
-	global USERNAME, PASSWORD, LOGS_FILE
+	global USERNAME, PASSWORD, LOGS_FILE, FILE, DEFAULT_TEXT_PLACE
 	"""
 	:param root: object
 	:param start: int
@@ -599,8 +590,10 @@ def loginWindow(root, start):
 	USERNAME = None
 	PASSWORD = None
 	LOGS_FILE = ""
+	FILE = ""
+	DEFAULT_TEXT_PLACE = None
 	clearAllElements(root)
-	users = getUsers(db)
+	users = Database.users(DB)
 	if users[1]:
 		all_users = users[0]
 		if len(all_users) == 0:
@@ -627,12 +620,12 @@ def tryCreateUser(root, username, password):
 	if username_verify == True:
 		if password_verify == True:
 			root.unbind("<Return>")
-			createUser(db, username, encryptPassword(password))
+			Database.new_user(DB, username, Encrypt.encryptPassword(password))
 			loginWindow(root, 0)
 		else:
-			Label(root, text=password_verify, background="lightblue", borderwidth=0, font=("Arial", 14, "bold")).place(x=260, y=400)
+			displayText(root, password_verify, 260, 400, _bw=0)
 	else:
-		Label(root, text=username_verify, background="lightblue", borderwidth=0, font=("Arial", 14, "bold")).place(x=260, y=400)
+		displayText(root, username_verify, 260, 400, _bw=0)
 
 
 def createUserWindow(root):
@@ -642,30 +635,13 @@ def createUserWindow(root):
 	display the create user window
 	"""
 	clearAllElements(root)
-	Label(root, text="Username", background="lightblue", borderwidth=0, font=("Arial", 16, "bold")).place(x=350, y=70)
-	username = Entry(root, width=25, background="white", fg="black", font=("Arial", 16))
-	username.place(x=250, y=120)
-	Label(root, text="Password", background="lightblue", borderwidth=0, font=("Arial", 16, "bold")).place(x=350, y=180)
-	password = Entry(root, width=25, background="white", fg="black", font=("Arial", 16), show="*")
-	password.place(x=250, y=230)
+	displayText(root, TEXTS[42], 350, 70, _bw=0, _font=BFONT)
+	username = displayEntry(root, 250, 120, _width=25, _bg="white", _fg="black", _font=BFONT)
+	displayText(root, TEXTS[5], 350, 180, _bw=0, _font=BFONT)
+	password = displayEntry(root, 250, 230, _width=25, _bg="white", _fg="black", _font=BFONT, _show="*")
 	root.bind("<Return>", lambda e: tryCreateUser(root, username.get(), password.get()))
-	Button(root, text="Create User", command=lambda:tryCreateUser(root, username.get(), password.get()), background="white", fg="black", font=("Arial", 16, "bold")).place(x=330, y=310)
-	Button(root, text="Back", command=lambda:loginWindow(root, 0), background="lightblue", fg="gray", borderwidth=0, font=("Arial", 14, "bold")).place(x=360, y=500)
-
-
-def setThingsToInitializeTheProgram():
-	"""
-	:return: bool
-	used to see if the database already exists if not creates one
-	"""
-	if not fileExist(db):
-		create_db = createDB(db)
-		if createDB(db) == True:
-			return True,
-		else:
-			return False, create_db
-	else:
-		return True,
+	displayButton(root, TEXTS[43], lambda:tryCreateUser(root, username.get(), password.get()), 330, 310, _bg="white", _fg="black", _font=BFONT)
+	displayButton(root, TEXTS[30], lambda:loginWindow(root, 0), 360, 500, _fg="gray", _bw=0)
 
 
 def errorWindow(error):
@@ -679,30 +655,9 @@ def errorWindow(error):
 		error_window.destroy()
 	except:
 		pass
-	error_window = Tk()
-	root.title("Error")
-	root.resizable(width=False, height=False)
-	root.configure(background="lightblue")
-	Label(error_window, text=error)
-	root.mainloop()
-
-
-def createScrollbar(root):
-	"""
-	:param root: object
-	:return: None
-	create a scrollbar
-	"""
-	canvas = Canvas(root, background="lightblue")
-	canvas.pack(side=LEFT, fill=BOTH, expand=1)
-	scroll_bar = Scrollbar(root, orient=VERTICAL, command=canvas.yview)
-	canvas.configure(yscrollcommand=scroll_bar.set)
-	scroll_bar.pack(side=RIGHT, fill=Y)
-	canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-	frame = Frame(canvas, background="lightblue")
-	canvas.create_window((0, 0), window=frame, anchor="nw")
-	return frame
-
+	error_window = createRootWindow(TEXTS[67])
+	displayText(error_window, error, _font=EFONT).pack()
+	error_window.mainloop()
 
 
 def displayTheLogs(root, logs, string):
@@ -714,12 +669,12 @@ def displayTheLogs(root, logs, string):
 	used to display the logs
 	"""
 	clearAllElements(root)
-	Button(root, text="Back", command=lambda:logsWindow(False)).pack()
-	Label(root, text="Logs", background="lightblue", borderwidth=0, font=("Arial", 14, "bold")).pack(pady=10)
+	displayButton(root, TEXTS[30], lambda:logsWindow(False), _place=False).pack()
+	displayText(root, TEXTS[7], _bw=0, _place=False).pack(pady=10)
 	frame = createScrollbar(root)
 	if logs:
 		logs_to_show = []
-		logs = decodeLogs(logs, PASSWORD)
+		logs = Logs.decodeLogs(logs, PASSWORD)
 		logs = logs[::-1]
 		for log in logs:
 			if string == "*":
@@ -729,9 +684,8 @@ def displayTheLogs(root, logs, string):
 					logs_to_show.append(log)
 		cont = 0
 		for log in logs_to_show:
-			Label(frame, text=log, background="lightblue", borderwidth=0, font=("Arial", 14)).pack(pady=5)
+			displayText(frame, log, _bw=0, _font=FONT_W, _place=False).pack(pady=5)
 			cont += 1
-
 
 
 def placeLogsButtons(logs_window, logs):
@@ -741,11 +695,11 @@ def placeLogsButtons(logs_window, logs):
 	:return: None
 	used to place the buttons in logs window
 	"""
-	Button(logs_window, command=lambda:displayTheLogs(logs_window, logs, "*"), text="All Logs", width=15).pack(pady=20)
-	Button(logs_window, command=lambda:displayTheLogs(logs_window, logs, OPTIONS[2]), text="Encrypt File Logs", width=15).pack(pady=20)
-	Button(logs_window, command=lambda:displayTheLogs(logs_window, logs, OPTIONS[3]), text="Encrypt String Logs", width=15).pack(pady=20)
-	Button(logs_window, command=lambda:displayTheLogs(logs_window, logs, OPTIONS[0]), text="Decrypt File Logs", width=15).pack(pady=20)
-	Button(logs_window, command=lambda:displayTheLogs(logs_window, logs, OPTIONS[1]), text="Decrypt Strings Logs", width=15).pack(pady=20)
+	cont = 44
+	options = ["*", OPTIONS[2], OPTIONS[3], OPTIONS[0], OPTIONS[1]]
+	for option in options:
+		displayButton(logs_window, TEXTS[cont], lambda option=option:displayTheLogs(logs_window, logs, option), _width=20, _place=False).pack(pady=20)
+		cont += 1
 
 
 def logsWindow(reload=True):
@@ -754,20 +708,16 @@ def logsWindow(reload=True):
 	:return: None
 	used to display the logs options
 	"""
-	logs = readLog(LOGS_FILE)
+	logs = Logs.readLog(LOGS_FILE)
 	if reload:
 		# When click
 		global logs_window
 		try:
-			logs_window.destroy()
+			info = logs_window.winfo_children()
 		except:
-			pass
-		logs_window = Tk()
-		logs_window.title("Logs")
-		logs_window.geometry("600x400")
-		logs_window.configure(background="lightblue")
-		placeLogsButtons(logs_window, logs)
-		logs_window.mainloop()
+			logs_window = createRootWindow(LT, LR, _resizable=(True, True))
+			placeLogsButtons(logs_window, logs)
+			logs_window.mainloop()
 	else:
 		# When click on back button
 		clearAllElements(logs_window)
@@ -775,15 +725,11 @@ def logsWindow(reload=True):
 
 
 if __name__ == "__main__":
-	root = Tk() # Call the object
-	root.title("Encrypt or Decrypt") # Set the title
-	root.geometry("800x600") # Set the geometry
-	root.resizable(width=False, height=False) # Don't allow to resize
-	root.configure(background="lightblue") # Set background to lightblue
-	things_to_set = setThingsToInitializeTheProgram() # Call the initialize settings
+	root = createRootWindow(TT, RS) # Call the object
+	things_to_set = Settings.setThingsToInitializeTheProgram(DB) # Call the initialize settings
 	if things_to_set[0] == True:
 		loginWindow(root, 0) # Call the login window
 	else:
 		error = things_to_set[1]
 		errorWindow(error) # Call the error window
-	root.mainloop() # Keep window open
+	root.mainloop()

@@ -1,4 +1,5 @@
-from dataBase.database import getUsers
+from dataBase.database import Database
+from config.config import *
 
 
 db = "dataBase/users.db" # database location
@@ -28,18 +29,18 @@ class VerifySigin():
 				if self.username.isalnum():
 					if len(self.username) <= 15:
 						valid = True
-						users = getUsers(db)[0]
+						users = Database.users(db)[0]
 						if self.username in users:
-							valid = "Username already exists"
+							valid = TEXTS[49]
 						return valid
 					else:
-						return "Username length must be less than 15 chars"
+						return TEXTS[50]
 				else:
-					return "Username must be alpha numeric"
+					return TEXTS[51]
 			else:
-				return "Username must be all lower case"
+				return TEXTS[52]
 		else:
-			return "You must set a username"
+			return TEXTS[53]
 
 
 	def verifyPassword(self):
@@ -53,8 +54,8 @@ class VerifySigin():
 				if len(self.password) <= 30:
 					return True
 				else:
-					return"Password must be 30 chars max"
+					return TEXTS[54]
 			else:
-				return "Password must be 4 chars longer"
+				return TEXTS[54]
 		else:
-			return "You must set a password"
+			return TEXTS[55]
